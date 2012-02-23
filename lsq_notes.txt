@@ -156,6 +156,23 @@ this is a worthwhile change to make in any case because the old design
 is terrible.
 
 The new design will be: instead of a PlayerStrategy instance corresponding
-to a player in a game, rather a PlayerStrategy will have a get_delegate
-method that returns a player that delegates strategic decisions to the
-strategy. 
+to a player in a game, rather a PlayerStrategy will have a create_player
+method that returns a Player that delegates strategic decisions to the
+strategy. Weights and compressed training data are maintained as
+instance variables of PlayerStrategy, whereas the experimented flag and
+the prev_features vector are instance variables of Player. This way,
+a strategy can be trained by two different players concurrently.
+
+Done! So now SimpleAI can self-play with different weights.
+Keep in mind that the "smart" weights might have been flukes, since we
+only ran 1000 games.
+Results (for "smart" weights vs original BMU-trained weights):
+  Win: 35.8% +/- 3.9%
+  Loss: 52.1% +/- 4.1%
+  Tie: 12.1% +/- 2.7%
+Definitely seems like the "smart" weights are actually pretty dumb.
+The update weights from this run would be:
+  Best:  [ 5.20467152  2.88381559 -6.07492049 -2.7463815 ]
+  Found:  [ 5.76272973  3.0919074  -6.12896186 -2.94875218]
+Note how these weights are pessimistic, since this version of SimpleAI
+tends to lose.
