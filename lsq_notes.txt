@@ -263,4 +263,28 @@ don't occur in BMU games:
 
 Let's try disabling the copper-density feature altogether. This perhaps leaves
 us with less power than the old model, because now a copper and an estate look
-the same in the deck... but oh well.
+the same in the deck... but oh well. The problem is that it's difficult to
+include a feature now that can't get copper density via a linear combination,
+and if that's possible, the solver will do it.
+
+Weights from that:
+  Best:  [ 2.11500823  3.88785563  0.05612424  0.16940762  0.37110225 -2.19524308
+   -3.8747309  -0.05391813 -0.18900806 -0.35788766 -0.14009059]
+  Found:  [-0.05661241  0.04575251 -0.07635714  0.06280407  0.23825626  0.03901031
+   -0.09023782  0.1089921  -0.09511622 -0.24295026 -0.24114975]
+Seems a lot more reasonable, I think.
+Now, Gold is rated about 1.84x as good as Silver, not too ridiculous.
+Also, Duchy is 3.02x as good as Estate, and Province 2.20x as good as Duchy.
+In fact, these coefficients are so reasonable, it makes me wonder why including
+copper density had such a disastrous effect!
+
+Let's try it out vs BMU. I suspect performance might be worse than the simpler
+model, simply because now it's a bit hampered in its ability to appreciate how
+much VP dilutes money. It can understand the dilution of silver and gold, but
+not the dilution of copper. On the other hand, it should have a more nuanced
+ability to understand the trade-offs between individual card types.
+Results:
+  Win: 22.6% +/- 3.4%
+  Loss: 74.0% +/- 3.6%
+  Tie: 3.4% +/- 1.5%
+Quite a lot worse than the simpler model.

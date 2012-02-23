@@ -191,7 +191,7 @@ class PlayerStrategy(object):
   def buy(self, player, game):
     pass
 
-FEATURE_COUNT = 13
+FEATURE_COUNT = 11
 
 class LearningPlayerStrategy(PlayerStrategy):
   def __init__(self):
@@ -215,8 +215,10 @@ class LearningPlayerStrategy(PlayerStrategy):
     ret = []
     ps = game.states[idx]
 
-    # copper, silver, gold density.
-    for c in 'csg':
+    # silver, gold density.
+    # Omit copper because it confuses the bot when learning from BMU,
+    # since BMU never buys copper.
+    for c in 'sg':
       ret.append(ps.card_density(c))
 
     # estate, duchy, province count.
@@ -356,13 +358,18 @@ class SimpleAI(LearningPlayerStrategy):
     # then applying the LSTD algorithm to compute weights.
     #self.weights = numpy.array([ 6.00857446,  3.15251864, -6.38471951, -3.00783411])
 
-    #self.weights = numpy.array([0.0]*FEATURE_COUNT)
+    self.weights = numpy.array([0.0]*FEATURE_COUNT)
 
     # Playing BMU against itself for 5000 plays, then LSTD. 13-feature model.
+    #self.weights = numpy.array(
+      #[ 14.42726814, 11.94976359, 13.63191231,  0.50696871,  0.60690088,
+         #0.84562124,-14.54334944,-11.94634136,-13.8635629 , -0.493736,
+        #-0.64088102, -0.85026777, -0.07545339])
+
+    # Playing BMU against itself for 2000 plays, then LSTD. 11-feature model.
     self.weights = numpy.array(
-      [ 14.42726814, 11.94976359, 13.63191231,  0.50696871,  0.60690088,
-         0.84562124,-14.54334944,-11.94634136,-13.8635629 , -0.493736,
-        -0.64088102, -0.85026777, -0.07545339])
+      [ 2.11500823, 3.88785563, 0.05612424, 0.16940762, 0.37110225,-2.19524308,
+       -3.8747309 ,-0.05391813,-0.18900806,-0.35788766,-0.14009059])
 
   def buy(self, player, game):
     ps = game.states[player.idx]
@@ -497,14 +504,14 @@ class Game(object):
 alpha = 0.0
 experiment_p = 0.0
 
-strategy = BigMoneyUltimate()
+strategy = SimpleAI()
 
 # Weights found using SimpleAI self-play using BMU weights, without
 # incremental updates.
 #strategy.name = 'SimpleAI smart?'
 #strategy.weights = numpy.array([ 5.76272973, 3.0919074, -6.12896186, -2.94875218])
 
-STRATEGIES = [strategy, strategy]
+STRATEGIES = [strategy, BigMoneyUltimate()]
 
 def main():
   global alpha
