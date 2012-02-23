@@ -162,8 +162,7 @@ class PlayerStrategy(object):
   def train(self, features=None, outcome=None):
     pass
 
-lhs = []
-rhs = []
+FEATURE_COUNT = 4
 
 class LearningPlayerStrategy(PlayerStrategy):
   def __init__(self, idx):
@@ -227,21 +226,27 @@ class LearningPlayerStrategy(PlayerStrategy):
     say('    x_t = %s' % x_t)
     say('    w_x_t = %.8lf' % w_x_t)
 
+    gradient = -x_t
+
     if features is not None:
       x_t1 = features
       w_x_t1 = w.dot(x_t1)
       say('    x_t1 = %s' % x_t1)
       say('    w_x_t1 = %.8lf' % w_x_t1)
       err = w_x_t1 - w_x_t
-      gradient = x_t1 - x_t
-      lhs.append(list(-gradient))
-      rhs.append(0.0)
+
+      x_t_m = numpy.matrix(x_t).transpose()
+      x_t1_m = numpy.matrix(x_t1).transpose()
+
+      self.__class__.compressed_A += x_t_m * (x_t_m - x_t1_m).transpose()
     else:
       say('    outcome = %.8lf' % outcome)
       err = outcome - w_x_t
-      gradient = -x_t
-      lhs.append(list(-gradient))
-      rhs.append(outcome)
+
+      x_t_m = numpy.matrix(x_t).transpose()
+
+      self.__class__.compressed_A += x_t_m * x_t_m.transpose()
+      self.__class__.compressed_b += outcome * x_t
 
     say('    err = %.8lf' % err)
 
@@ -264,6 +269,9 @@ class BasicBigMoney(PlayerStrategy):
     ps.buy('s')
 
 class BigMoneyUltimate(LearningPlayerStrategy):
+  compressed_A = numpy.array([[0.0]*FEATURE_COUNT for i in range(FEATURE_COUNT)])
+  compressed_b = numpy.array([0.0]*FEATURE_COUNT)
+
   #weights = numpy.array([1.0,0.6,-1.0,-0.6])
   weights = numpy.array([0.0,1.0,-0.0,-1.0])
 
@@ -282,8 +290,6 @@ class BigMoneyUltimate(LearningPlayerStrategy):
 
     self.experimented = False
 
-FEATURE_COUNT = 4
-
 sumsqerr = 0.0
 nsamples = 0
 msqerrf = file('msqerr.txt', 'w')
@@ -298,12 +304,26 @@ def show_learn_data(cls):
   print >>msqerrf, msqerr
 
 class SimpleAI(LearningPlayerStrategy):
-  #ai_weights = numpy.array([random.gauss(0,1) for i in range(2)])
-  weights = numpy.array([1.0,0.6,-1.0,-0.6])
-  #ai_weights = numpy.array([1.0,1.0,-1.0,-1.0])
+  compressed_A = numpy.array([[0.0]*FEATURE_COUNT for i in range(FEATURE_COUNT)])
+  compressed_b = numpy.array([0.0]*FEATURE_COUNT)
+
+  #weights = numpy.array([random.gauss(0,1) for i in range(2)])
+  #weights = numpy.array([1.0,0.6,-1.0,-0.6])
+  #weights = numpy.array([1.0,1.0,-1.0,-1.0])
 
   # These weights were obtained from 1000 self-plays.
-  #ai_weights = numpy.array([ 0.95707939,  1.93092173, -1.02307045, -1.93986092])
+  #weights = numpy.array([ 0.95707939,  1.93092173, -1.02307045, -1.93986092])
+
+  # These weights were obtained by playing BMU against itself for 10,000 plays,
+  # then applying the LSTD algorithm to compute weights for which the sum of TD
+  # updates is zero.
+  # These weights make for a high-quality AI.
+  weights = numpy.array([ 4.80675988, 3.00011302, -5.08273628, -2.92180695])
+
+  # These weights were obtained by playing SimpleAI against itself for 1000 plays,
+  # starting with the previous weights and updating incrementally,
+  # then applying the LSTD algorithm to compute weights.
+  #weights = numpy.array([ 6.00857446,  3.15251864, -6.38471951, -3.00783411])
 
   def __init__(self, idx):
     LearningPlayerStrategy.__init__(self, idx)
@@ -351,7 +371,7 @@ class Game(object):
       self.strategies = [s for s in parent.strategies]
       self.supply = copy.copy(parent.supply)
     else:
-      self.strategy_types = [BigMoneyUltimate, BigMoneyUltimate]
+      self.strategy_types = STRATEGY_TYPES
       random.shuffle(self.strategy_types)
 
       self.states = []
@@ -441,6 +461,9 @@ class Game(object):
 alpha = 0.0
 experiment_p = 0.0
 
+klass = SimpleAI
+STRATEGY_TYPES = [SimpleAI, SimpleAI]
+
 def main():
   global alpha
   global experiment_p
@@ -448,12 +471,14 @@ def main():
   wins = {}
   for i in range(N):
     log_msg('******* Game %d/%d' % (i,N))
-    alpha = 0.002
-    experiment_p = 0.01
+    # alpha = 0.5 approaches a reasonable solution quickly. Larger values
+    # tend to diverge.
+    alpha = 0.0
+    experiment_p = 0.0
     game = Game()
     winners = game.play()
     print 'Game %d' % i,
-    show_learn_data(BigMoneyUltimate)
+    show_learn_data(klass)
     print '  Winner %s' % winners
     winners = tuple(winners)
     wins[winners] = wins.get(winners,0) + 1
@@ -462,7 +487,6 @@ def main():
     print '%3d: %s' % (n,w)
 
   f = file('lsq_data.txt', 'w')
-  print >>f, lhs
-  print >>f, rhs
+  print >>f, repr((klass.compressed_A, klass.compressed_b, klass.weights))
 
 main()

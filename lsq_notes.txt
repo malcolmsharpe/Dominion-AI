@@ -1,0 +1,161 @@
+==== Feb 22, 2012
+
+Experiment with comparing iterative solving to exact solving.
+
+*** BigMoneyUltimate
+
+alpha = 0.01
+initial weights = [0,1,0,-1]
+
+A run of 100 games:
+  Best:  [ 4.29508338  2.93704835 -4.54502706 -2.87357622]
+  Found:  [  2.03326253e-03   1.03804614e+00  -2.27004143e-04  -1.06592063e+00]
+
+Another:
+  Best:  [ 5.58029168  3.39851064 -5.90434826 -3.31513852]
+  Found:  [  4.65158804e-03   1.03557099e+00  -9.93641494e-04  -1.08492468e+00]
+
+A run of 1000 games:
+  Best:  [ 4.91180147  3.11083833 -5.19287036 -3.03654276]
+  Found:  [ 0.05964249  1.44408752 -0.0588232  -1.51734499]
+
+So, the best solution seems reasonably consistent.
+The iterative convergence is much too slow!
+
+Try alpha = 0.2. This might risk divergence, but at least convergence should
+be faster if it occurs.
+
+Run of 1000 games:
+  Best:  [ 5.23274332  3.10012048 -5.5334671  -3.00607252]
+  Found:  [ 2.48050491  2.59399158 -2.94985874 -2.72150569]
+
+Convergence STILL too slow! Try alpha = 1.0 !
+Note that the amount of data is apparently still too low to get a very reliable
+best solution, as there is a fair bit of difference from the previous one.
+
+With alpha = 1.0, got severe divergence:
+  Best:  [ 4.79729666  2.98188381 -5.07034035 -2.90589255]
+  Found:  [  5.01320614e+145  -7.05181414e+144   5.59635992e+145   2.15306331e+145]
+The divergence was experienced even after just the 2nd game,
+so it is quite fast.
+
+Let's see where the critical point is for alpha.
+alpha = 0.5?
+  Best:  [ 4.98041757  2.95815444 -5.26772694 -2.86182576]
+  Found:  [ 4.30374657  2.81009816 -4.69511505 -3.28508863]
+Converged fairly well, with no crazy divergence.
+
+Let's see how it would do over 10,000 games, again with alpha = 0.5.
+Visually, convergence seems worse than the previous run: e.g. it's at about 2000
+games now, and the first coefficient is still less than 4.
+  Best:  [ 4.80675988  3.00011302 -5.08273628 -2.92180695]
+  Found:  [ 4.26385022  2.6779444  -4.24603723 -3.53405828]
+Visually, there seemed to be fairly large fluctuations in the found coefficients
+throughout the algorithm, so probably alpha is too large for later training.
+
+Out of curiosity, how well does SimpleAI perform with the "best" weights from
+the previous trial? Before we try, observe that only the first two weights will
+affect the performance of the AI, because the other weights correspond to features
+of the opponent player that aren't changed by our buy decision. The ratio of
+the VP weight over the money-density weight is roughly 0.625, whereas hand
+optimization found that roughly 0.6 performed best--about the same number!
+
+To observe the performance of these weights, we ran 1000 trials of SimpleAI
+against BMU. Results (with 99% confidence intervals):
+  Win: 36.9% +/- 3.9%
+  Loss: 58.1% +/- 4.0%
+  Tie: 5.0% +/- 1.8%
+
+For comparison, consider the performance of BasicBigMoney against BMU:
+  Win: 17.8% +/- 3.1%
+  Loss: 80.2% +/- 3.2%
+  Tie: 2.0% +/- 1.1%
+Quite a bit worse.
+
+Let's see if we can get better performance by training SimpleAI directly
+against BMU. Let's use a small value of alpha since we already have a
+decent starting point--try alpha=0.05, and to start, 1000 trials.
+Experiment rate is set to zero. Unfortunately, even by game ~700 the
+coefficient for money-density has dropped below the coefficient for
+VP, and now SimpleAI is performing extremely poorly, in total winning
+fewer than 10% of games. Final weights:
+  Best:  [ 5.22224107  0.59376631 -5.53730531 -0.39199473]
+  Found:  [ 2.11569303  3.57695386 -6.45648768 -1.00935343]
+Really bizarre best solution, as well. Perhaps this can be explained as
+follows: in early games, when the weights were close to the originals,
+SimpleAI would invest in both money and VP and sometimes win. In later
+games, with the broken weights, SimpleAI would heavily overinvest in
+VP and never win--thus the best solution tends to recognize presence of
+VP as overly bad and presence of money density of overly good, since
+these correspond to periods of poor play and good play, respectively.
+
+The obvious question is... why is it that training weights via observing
+BMU play yields a good AI, but when the AI observes its own play vs BMU to
+train weights, it does terribly?
+
+Some things to test:
+- SimpleAI vs SimpleAI: was it just learning bad habits against BMU due to
+  losing often? Running this now with the same parameters.
+- SimpleAI vs BMU, but without incremental updates, and then compute best
+  solution: this would help determine if the instability of incremental
+  updates is causing issues, since if the best solution here is also
+  actually a poor solution, that would indicate a problem.
+
+Result of SimpleAI vs SimpleAI:
+  Best:  [ 6.00857446  3.15251864 -6.38471951 -3.00783411]
+  Found:  [ 5.02746337  3.0508573  -5.34550722 -2.92599645]
+Visual observation showed that the found rates were varying somewhat,
+but they didn't stray too far from the initial weights, so that is good.
+Strangely enough, the best solution seems to overvalue money density.
+Let's try this solution vs BMU (without updates) to see the result:
+  Win: 27.9% +/- 3.7%
+  Loss: 67.7% +/- 3.8%
+  Tie: 4.4% +/- 1.7%
+Definitely worse than before. Note that the key ratio is about 0.525 here,
+well below the hand-optimized value of roughly 0.6.
+
+Why would the best solution overvalue money density in self-play?
+The fact that the two players are using the same weights means that the
+explanation in the vs-BMU case no longer really makes sense, because the
+winrate between the players should always be around 50%.
+TODO!!!!!
+
+For the record, best weights:
+  Best:  [ 1.32668138  2.60300329 -1.39226533 -2.71456454]
+  Found:  [ 6.00857446  3.15251864 -6.38471951 -3.00783411]
+I wonder whether the emphasis on VP is influenced by SimpleAI's underdog
+status. As an underdog, it depends on scoring lucky provinces to win--
+when this occurs, its VP count is higher than usual. On the other hand,
+if it hits $7, it will buy golds, increasing its money density, which
+then looks bad.
+
+Let's try playing against BMU with the good weights, without incremental
+updates, and then computing the best solution, to see if it's the
+incremental updates that are problematic. (1000 plays.)
+Note that ONLY the TD updates from SimpleAI's perspective will be used
+to compute weights.
+Performance (as expected, similar to before):
+  Win: 36.3% +/- 3.9%
+  Loss: 59.6% +/- 4.0%
+  Tie: 4.1% +/- 1.6%
+Weights:
+  Best:  [ 3.01378615  2.71707892 -4.02457252 -2.46092754]
+  Found:  [ 4.80675988  3.00011302 -5.08273628 -2.92180695]
+Again the problem with undervaluing money density and overvaluing VP!
+Really vexing.
+
+What are the best weights for self-play without incremental updates?
+  Best:  [ 5.76272973  3.0919074  -6.12896186 -2.94875218]
+  Found:  [ 4.80675988  3.00011302 -5.08273628 -2.92180695]
+Now money density is OVER-valued. ???
+I guess it might be the case that these best weights would give favourable
+results in self-play, even if they are not the best choice against BMU.
+This seems worth testing. It requires a bit of change in program design
+so that different instances of SimpleAI can use different weights, but
+this is a worthwhile change to make in any case because the old design
+is terrible.
+
+The new design will be: instead of a PlayerStrategy instance corresponding
+to a player in a game, rather a PlayerStrategy will have a get_delegate
+method that returns a player that delegates strategic decisions to the
+strategy. 

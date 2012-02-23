@@ -1,0 +1,10 @@
+# VIM swap files.
+*.swp
+
+# Generate logfiles.
+ai_log.txt
+lsq_data.txt
+msqerr.txt
+
+# Compiled python files.
+*.pyc
