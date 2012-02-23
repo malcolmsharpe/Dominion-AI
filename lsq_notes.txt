@@ -6,6 +6,11 @@ Experiment with comparing iterative solving to exact solving.
 
 alpha = 0.01
 initial weights = [0,1,0,-1]
+model:
+  my money density / 3.0
+  my vp / 43.0
+  opponent money density / 3.0
+  opponent vp / 43.0
 
 A run of 100 games:
   Best:  [ 4.29508338  2.93704835 -4.54502706 -2.87357622]
@@ -52,6 +57,8 @@ games now, and the first coefficient is still less than 4.
   Found:  [ 4.26385022  2.6779444  -4.24603723 -3.53405828]
 Visually, there seemed to be fairly large fluctuations in the found coefficients
 throughout the algorithm, so probably alpha is too large for later training.
+
+    <=== NOTE: The above "best" weights are strong. ===>
 
 Out of curiosity, how well does SimpleAI perform with the "best" weights from
 the previous trial? Before we try, observe that only the first two weights will
@@ -176,3 +183,84 @@ The update weights from this run would be:
   Found:  [ 5.76272973  3.0919074  -6.12896186 -2.94875218]
 Note how these weights are pessimistic, since this version of SimpleAI
 tends to lose.
+
+Now for something fun!
+We can write
+  money_density = copper_density + 2*silver_density + 3*gold_density;
+  total_vp = estate_count + 3*duchy_count + 6*province_count.
+So, splitting into these individual features should not damage our
+model's power, and can maybe improve it. Let's try!
+
+New model (for me, then for opponent):
+  copper density
+  silver density
+  gold density
+  estate count / 7
+  duchy count / 4
+  province count / 4
+
+First observation while training by observing BMU: even alpha=0.01 saw
+divergence with incremental updates (although note this starts with
+random weights drawn from N(0,1)). So the increase in features maybe
+leads to instability. alpha=0.002 seems to be stable.
+
+After 1000 games, weights:
+  Best:  [ 14.71643228  12.2656796   13.95768907   0.52691816   0.64333316
+     0.86416075 -14.89968981 -12.28664605 -14.23262165  -0.51322355
+    -0.67777177  -0.87454557]
+  Found:  [ 1.6289053  -0.52451952 -0.22484738 -0.17929265  0.09038819  0.28776102
+   -0.84303723  0.41713313  0.37942689  0.04371454 -0.09460905 -0.26615444]
+
+The "best" weights seem very extreme. A coefficient of ~15 for copper density,
+really? And a whopping ~14 for gold density? Meanwhile, province count receives
+a miniscule 0.86! The copper density coefficient may be damaged due to the
+feature essentially being "7 / (10 + # buys made)", since BMU does not buy
+copper. Excluding copper density is tempting, but that would give less power
+than our original model.
+
+Let's try a few things:
+- Include a 0/1 variable which is 0 for the first player, 1 for the second player.
+- Run for 5000 games.
+- Start at zero weights.
+
+Weights:
+  Best:  [ 14.42726814  11.94976359  13.63191231   0.50696871   0.60690088
+     0.84562124 -14.54334944 -11.94634136 -13.8635629   -0.493736
+    -0.64088102  -0.85026777  -0.07545339]
+  Found:  [ 0.0042212  -0.12199819  0.15038786 -0.07401236  0.01654467  0.26061165
+    0.04979619  0.11603943 -0.23253175  0.09791922 -0.03610467 -0.24584386
+   -0.25333274]
+Well for a start, the incremental updates completely failed to converge to
+anything reasonable whatsoever. The best weights here are simply bizarre.
+Apparently copper is better than gold, and silver is the worst of all.
+I really find this hard to understand. Anyway, let's pit it vs BMU and see what
+happens!
+
+Unsurprisingly, it is getting demolished, due to making such bizarre moves as
+opening copper/copper. In fact, out of 1000 games, it wins none. =(
+
+Let's try to figure out what's up with this. First of all, the copper density
+feature (as observed before) is basically just the reciprocal of the deck size.
+Why it's so good to have a small deck, I do not know. Anyway, this makes it
+clear that watching BMU doesn't help with figuring out when to buy coppers,
+since, well, BMU does not buy coppers!
+
+Why do estates (and to a lesser extent duchies) look so good and provinces so
+bad? Maybe because, in the endgame, if the provinces split evenly, then estates
+actually are really important. A lot of games, BMU will split the provinces
+evenly, so there you go. More of a functional thought: the VP coefficients
+are mainly useful for indicating when to switch from buying money to buying
+VP, as long as the coefficients are ordered correctly. So, the high coefficient
+on estate basically means that it's correct to switch to buying estates not
+long after buying provinces, which seems totally reasonable.
+
+The oversights seem to be explainable by not understanding situations that
+don't occur in BMU games:
+- The bot doesn't understand that buying copper is bad, because it never sees
+  a situation where buying copper causes a loss.
+- The bot doesn't understand that a province is better than two estates,
+  because this isn't really relevant when there is no +buy.
+
+Let's try disabling the copper-density feature altogether. This perhaps leaves
+us with less power than the old model, because now a copper and an estate look
+the same in the deck... but oh well.

@@ -135,6 +135,12 @@ class PlayerState(object):
         vp += points[card]
     return vp
 
+  def count_card(self, card):
+    return sum(c == card for c in self.get_all_cards())
+
+  def card_density(self, card):
+    return self.count_card(card) / float(self.total_cards_in_deck())
+
   def total_money_in_deck(self):
     return sum(values.get(card, 0) for card in self.get_all_cards())
 
@@ -185,7 +191,7 @@ class PlayerStrategy(object):
   def buy(self, player, game):
     pass
 
-FEATURE_COUNT = 4
+FEATURE_COUNT = 13
 
 class LearningPlayerStrategy(PlayerStrategy):
   def __init__(self):
@@ -209,18 +215,21 @@ class LearningPlayerStrategy(PlayerStrategy):
     ret = []
     ps = game.states[idx]
 
-    # Money density / 3.0.
-    total_money = ps.total_money_in_deck()
-    card_count = ps.total_cards_in_deck()
-    ret.append((total_money / float(card_count)) / 3.0)
+    # copper, silver, gold density.
+    for c in 'csg':
+      ret.append(ps.card_density(c))
 
-    # VP / 43.0.
-    ret.append(ps.get_vp() / 43.0)
+    # estate, duchy, province count.
+    for c in 'edp':
+      ret.append(float(ps.count_card(c)))
 
     return ret
 
   def extract_features(self, player, game):
-    lst = self.player_features(game, player.idx) + self.player_features(game, 1-player.idx)
+    lst = []
+    lst.extend(self.player_features(game, player.idx))
+    lst.extend(self.player_features(game, 1-player.idx))
+    lst.append(float(player.idx))
     return numpy.array(lst)
 
   def train(self, player, features=None, outcome=None):
@@ -295,7 +304,8 @@ class BigMoneyUltimate(LearningPlayerStrategy):
   def __init__(self):
     LearningPlayerStrategy.__init__(self)
     #self.weights = numpy.array([1.0,0.6,-1.0,-0.6])
-    self.weights = numpy.array([0.0,1.0,-0.0,-1.0])
+    #self.weights = numpy.array([0.0,1.0,-0.0,-1.0])
+    self.weights = numpy.array([0.0]*FEATURE_COUNT)
 
   def buy(self, player, game):
     ps = game.states[player.idx]
@@ -310,7 +320,7 @@ class BigMoneyUltimate(LearningPlayerStrategy):
       ps.buy('d')
     ps.buy('s')
 
-    self.experimented = False
+    player.experimented = False
 
 sumsqerr = 0.0
 nsamples = 0
@@ -339,12 +349,20 @@ class SimpleAI(LearningPlayerStrategy):
     # then applying the LSTD algorithm to compute weights for which the sum of TD
     # updates is zero.
     # These weights make for a high-quality AI.
-    self.weights = numpy.array([ 4.80675988, 3.00011302, -5.08273628, -2.92180695])
+    #self.weights = numpy.array([ 4.80675988, 3.00011302, -5.08273628, -2.92180695])
 
     # These weights were obtained by playing SimpleAI against itself for 1000 plays,
     # starting with the previous weights and updating incrementally,
     # then applying the LSTD algorithm to compute weights.
     #self.weights = numpy.array([ 6.00857446,  3.15251864, -6.38471951, -3.00783411])
+
+    #self.weights = numpy.array([0.0]*FEATURE_COUNT)
+
+    # Playing BMU against itself for 5000 plays, then LSTD. 13-feature model.
+    self.weights = numpy.array(
+      [ 14.42726814, 11.94976359, 13.63191231,  0.50696871,  0.60690088,
+         0.84562124,-14.54334944,-11.94634136,-13.8635629 , -0.493736,
+        -0.64088102, -0.85026777, -0.07545339])
 
   def buy(self, player, game):
     ps = game.states[player.idx]
@@ -479,14 +497,14 @@ class Game(object):
 alpha = 0.0
 experiment_p = 0.0
 
-strategy = SimpleAI()
+strategy = BigMoneyUltimate()
 
 # Weights found using SimpleAI self-play using BMU weights, without
 # incremental updates.
-strategy.name = 'SimpleAI smart?'
-strategy.weights = numpy.array([ 5.76272973, 3.0919074, -6.12896186, -2.94875218])
+#strategy.name = 'SimpleAI smart?'
+#strategy.weights = numpy.array([ 5.76272973, 3.0919074, -6.12896186, -2.94875218])
 
-STRATEGIES = [strategy, SimpleAI()]
+STRATEGIES = [strategy, strategy]
 
 def main():
   global alpha
@@ -495,6 +513,7 @@ def main():
   wins = {}
   for i in range(N):
     log_msg('******* Game %d/%d' % (i,N))
+    # In the old 4-feature model,
     # alpha = 0.5 approaches a reasonable solution quickly. Larger values
     # tend to diverge.
     alpha = 0.0
