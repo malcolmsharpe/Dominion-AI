@@ -1,7 +1,8 @@
 import math
+import model
 import numpy
 from numpy import array
-from scipy.linalg import solve
+from scipy.linalg import solve,lstsq
 import sys
 
 if len(sys.argv) != 2:
@@ -10,10 +11,20 @@ if len(sys.argv) != 2:
   sys.exit(1)
 
 f = file(sys.argv[1])
-compressed_A, compressed_b, soln = eval(f.read())
+A, b, soln = map(numpy.array, eval(f.read()))
 iterative_solution = numpy.array(soln)
 
-w = solve(compressed_A, compressed_b)
+# There may be linear dependencies among features.
+# This means A will be singular, which makes scipy.solve upset.
+# Also, it's difficult to say which solution to the linear system we want.
+# However, the lstsq routine seems to do okay. I don't know which solution
+# it is picking though (hopefully the one of minimum norm)!
+w,residues,rank,sigma = lstsq(A, b)
 
+print '# features = %d' % model.FEATURE_COUNT
+print 'rank = %d' % rank
+print 'total residue = %.8lf' % sum(residues)
+print 'sigma = %s' % sigma
 print 'Best: ', w
 print 'Found: ', iterative_solution
+print >>file('offline_weights.txt', 'w'), repr(w)

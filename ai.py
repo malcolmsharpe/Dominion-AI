@@ -1,11 +1,18 @@
 import copy
+import cProfile
 import math
 import numpy
+from numpy import array
 import random
 from stats import binomial_confidence_interval
 
+# I estimate roughly 800 games per minute when training with BMU
+# and FINE_GRAIN_TURNS=25.
 N = 1000
+
 verbose = 0
+log_model_data = 0
+print_model_data = 0
 
 costs = {
   'c': 0,
@@ -162,12 +169,14 @@ class Player(object):
   def __init__(self, idx, strategy):
     self.idx = idx
     self.strategy = strategy
+    self.turn = 0
 
     self.experimented = True
     self.prev_features = None
 
   def update_model(self, game):
     self.strategy.update_model(self, game)
+    self.turn += 1
 
   def train(self, features=None, outcome=None):
     self.strategy.train(self, features=features, outcome=outcome)
@@ -191,7 +200,8 @@ class PlayerStrategy(object):
   def buy(self, player, game):
     pass
 
-FEATURE_COUNT = 11
+from model import *
+seen_features = set()
 
 class LearningPlayerStrategy(PlayerStrategy):
   def __init__(self):
@@ -212,27 +222,36 @@ class LearningPlayerStrategy(PlayerStrategy):
     return self.evaluate_features(self.extract_features(player, game))
 
   def player_features(self, game, idx):
-    ret = []
     ps = game.states[idx]
+    ret = numpy.array([0.0]*PLAYER_FEATURES)
 
-    # silver, gold density.
-    # Omit copper because it confuses the bot when learning from BMU,
-    # since BMU never buys copper.
-    for c in 'sg':
-      ret.append(ps.card_density(c))
-
-    # estate, duchy, province count.
-    for c in 'edp':
-      ret.append(float(ps.count_card(c)))
+    # silver, gold, estate, duchy, province count.
+    for i,c in enumerate('sgedp'):
+      ret[i] = float(ps.count_card(c))
 
     return ret
 
   def extract_features(self, player, game):
-    lst = []
-    lst.extend(self.player_features(game, player.idx))
-    lst.extend(self.player_features(game, 1-player.idx))
-    lst.append(float(player.idx))
-    return numpy.array(lst)
+    if player.turn < FINE_GRAIN_TURNS:
+      turn_idx = player.turn
+    else:
+      turn_idx = FINE_GRAIN_TURNS
+    offset = turn_idx * PER_TURN_FEATURES
+    
+    ret = numpy.array([0.0]*FEATURE_COUNT)
+
+    ret[offset:offset+PLAYER_FEATURES] = self.player_features(game, player.idx)
+    ret[offset+PLAYER_FEATURES:offset+PLAYER_FEATURES*2] = self.player_features(game, 1-player.idx)
+    ret[offset+PLAYER_FEATURES*2] = float(player.idx)
+
+    for i in range(offset, offset+PLAYER_FEATURES*2+1):
+      if i not in seen_features:
+        seen_features.add(i)
+        say('    $$ Saw feature %d for the first time'
+            '--now have seen %d/%d features.'
+            % (i,len(seen_features),FEATURE_COUNT))
+
+    return ret
 
   def train(self, player, features=None, outcome=None):
     global sumsqerr
@@ -256,17 +275,17 @@ class LearningPlayerStrategy(PlayerStrategy):
     w = self.weights
     w_x_t = w.dot(x_t)
 
-    say('    w = %s' % w)
-    say('    x_t = %s' % x_t)
-    say('    w_x_t = %.8lf' % w_x_t)
+    if log_model_data: say('    w = %s' % w)
+    if log_model_data: say('    x_t = %s' % x_t)
+    if log_model_data: say('    w_x_t = %.8lf' % w_x_t)
 
     gradient = -x_t
 
     if features is not None:
       x_t1 = features
       w_x_t1 = w.dot(x_t1)
-      say('    x_t1 = %s' % x_t1)
-      say('    w_x_t1 = %.8lf' % w_x_t1)
+      if log_model_data: say('    x_t1 = %s' % x_t1)
+      if log_model_data: say('    w_x_t1 = %.8lf' % w_x_t1)
       err = w_x_t1 - w_x_t
 
       x_t_m = numpy.matrix(x_t).transpose()
@@ -274,7 +293,7 @@ class LearningPlayerStrategy(PlayerStrategy):
 
       self.compressed_A += x_t_m * (x_t_m - x_t1_m).transpose()
     else:
-      say('    outcome = %.8lf' % outcome)
+      if log_model_data: say('    outcome = %.8lf' % outcome)
       err = outcome - w_x_t
 
       x_t_m = numpy.matrix(x_t).transpose()
@@ -288,11 +307,11 @@ class LearningPlayerStrategy(PlayerStrategy):
     nsamples += 1
 
     adjustment = -alpha * err * gradient
-    say('    adjustment = %s' % adjustment)
+    if log_model_data: say('    adjustment = %s' % adjustment)
 
     self.weights = w + adjustment
 
-    say('    w\' = %s' % self.weights)
+    if log_model_data: say('    w\' = %s' % self.weights)
     say('')
 
 class BasicBigMoney(PlayerStrategy):
@@ -334,7 +353,10 @@ def show_learn_data(strategy):
   msqerr = sumsqerr / nsamples
   sumsqerr = 0.0
   nsamples = 0
-  print '==> %s weights: %s (msq err = %.8lf)' % (strategy.name, strategy.weights, msqerr)
+  if print_model_data:
+    print '==> %s weights: %s (msq err = %.8lf)' % (strategy.name, strategy.weights, msqerr)
+  else:
+    print '==> %s (msq err = %.8lf)' % (strategy.name, msqerr)
   print >>msqerrf, msqerr
 
 class SimpleAI(LearningPlayerStrategy):
@@ -367,9 +389,12 @@ class SimpleAI(LearningPlayerStrategy):
         #-0.64088102, -0.85026777, -0.07545339])
 
     # Playing BMU against itself for 2000 plays, then LSTD. 11-feature model.
-    self.weights = numpy.array(
-      [ 2.11500823, 3.88785563, 0.05612424, 0.16940762, 0.37110225,-2.19524308,
-       -3.8747309 ,-0.05391813,-0.18900806,-0.35788766,-0.14009059])
+    #self.weights = numpy.array(
+      #[ 2.11500823, 3.88785563, 0.05612424, 0.16940762, 0.37110225,-2.19524308,
+       #-3.8747309 ,-0.05391813,-0.18900806,-0.35788766,-0.14009059])
+
+    self.weights = eval(file('offline_weights.txt').read())
+    assert len(self.weights) == FEATURE_COUNT
 
   def buy(self, player, game):
     ps = game.states[player.idx]
@@ -537,6 +562,7 @@ def main():
     print '%3d: %s' % (n,w)
 
   f = file('lsq_data.txt', 'w')
-  print >>f, repr((strategy.compressed_A, strategy.compressed_b, strategy.weights))
+  print >>f, repr((strategy.compressed_A.tolist(), strategy.compressed_b, strategy.weights))
 
 main()
+#cProfile.run('main()')
