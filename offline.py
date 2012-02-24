@@ -17,8 +17,10 @@ iterative_solution = numpy.array(soln)
 # There may be linear dependencies among features.
 # This means A will be singular, which makes scipy.solve upset.
 # Also, it's difficult to say which solution to the linear system we want.
-# However, the lstsq routine seems to do okay. I don't know which solution
-# it is picking though (hopefully the one of minimum norm)!
+# However, the lstsq routine seems to do okay.
+# It uses the gelss routine from LAPACK, which finds a solution of
+# minimum norm.
+# See: http://www.netlib.org/lapack/lug/node27.html
 w,residues,rank,sigma = lstsq(A, b)
 
 print '# features = %d' % model.FEATURE_COUNT
