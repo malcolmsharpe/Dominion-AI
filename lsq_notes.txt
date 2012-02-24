@@ -310,3 +310,11 @@ With obtained weights, ran 1000 games of SimpleAI against BMU:
   Tie: 2.3% +/- 1.2%
 So... it's much weaker than what we got doing 10,000 games with the original
 4-feature model. =(
+
+Potentially the problem here is that 12,000 games for 275 features is much less
+training than 10,000 for 4 features. So, let's try 30,000 games and see if that
+gives better results:
+  Win: 21.0% +/- 3.3%
+  Loss: 76.6% +/- 3.4%
+  Tie: 2.4% +/- 1.2%
+About the same.
