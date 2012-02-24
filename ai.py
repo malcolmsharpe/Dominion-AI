@@ -4,7 +4,8 @@ import math
 import numpy
 from numpy import array
 import random
-from stats import binomial_confidence_interval
+import re
+from stats import binomial_confidence_interval, binomial_confidence_interval_p
 
 # I estimate roughly 800 games per minute when training with BMU
 # and FINE_GRAIN_TURNS=25.
@@ -558,11 +559,29 @@ def main():
     winners = tuple(winners)
     wins[winners] = wins.get(winners,0) + 1
   print
-  for w,n in wins.items():
-    print '%3d: %s' % (n,w)
 
   f = file('lsq_data.txt', 'w')
   print >>f, repr((strategy.compressed_A.tolist(), strategy.compressed_b, strategy.weights))
+
+  for w,n in wins.items():
+    print '%3d: %s' % (n,w)
+  print
+  
+  basic_wins = {}
+  for w,n in wins.items():
+    if len(w) == 1:
+      name = re.match('([^ ]*)', w[0]).group(1)
+    else:
+      name = 'Tie'
+    basic_wins[name] = basic_wins.get(name, 0) + n
+  assert sum(basic_wins.values()) == N
+
+  conf = 0.01
+  print 'All intervals with confidence %.1lf%%' % (100.0 * (1-conf))
+  for w,n in basic_wins.items():
+    p = n/float(N)
+    ivl = binomial_confidence_interval_p(p, N, conf)
+    print '  %s: %.1lf%% +/- %.1lf%%' % (w, 100.0 * p, 100.0 * ivl)
 
 main()
 #cProfile.run('main()')
