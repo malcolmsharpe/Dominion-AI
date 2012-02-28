@@ -6,6 +6,7 @@ import random
 def phi(x):
   return 1. / (1 + numpy.exp(-x))
 
+HEADER = 'Neural network dump.'
 class Network(object):
   def __init__(self, ninput, nhidden):
     self.m = ninput
@@ -16,7 +17,7 @@ class Network(object):
     # rule will leave all coordinates of a, b, and w equal. So, introduce
     # a bit of randomness to the initial input weights. It turns out that this
     # was sufficient to get good performance on the XOR example.
-    self.w = numpy.array([[random.gauss(0,1) for j in range(self.m)] for i in range(self.n)])
+    self.w = numpy.array([[random.gauss(0,0.1) for j in range(self.m)] for i in range(self.n)])
 
   def _get_hidden(self, x):
     # Element-wise application of phi.
@@ -41,11 +42,22 @@ class Network(object):
     print 'w = %s' % self.w
 
   def dump(self, f):
-    print >>f, 'Neural network dump.'
+    print >>f, HEADER
     print >>f, 'm = %s' % self.m
     print >>f, 'n = %s' % self.n
     print >>f, 'a = %r' % self.a.tolist()
     print >>f, 'w = %r' % self.w.tolist()
+
+  def load(self, f):
+    header, mline, nline, aline, wline = [line.strip() for line in f]
+
+    assert header == HEADER, 'Expected %r. Received %r.' % (HEADER, header)
+    exec 'self.' + mline
+    exec 'self.' + nline
+    exec 'self.' + aline
+    self.a = numpy.array(self.a)
+    exec 'self.' + wline
+    self.w = numpy.array(self.w)
 
 def xor_example():
   def xor(a,b):

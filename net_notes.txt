@@ -1,0 +1,22 @@
+** Feb 28, 2012
+
+With 15,000 games of self-play with a neural network, got results:
+  SimpleAI: 38.2% +/- 4.0%
+  Tie: 5.4% +/- 1.8%
+  BigMoneyUltimate: 56.4% +/- 4.0%
+This roughly matches the best performance achieved with the previous
+technique of training on BMU self-play using batch learning. These
+weights were however achieved by self-play and incremental learning,
+which hopefully means there is more room for improvement.
+
+I am tracking a new statistic that hopefully can help with tweaking
+the learning rate: number of mistakes, which are
+almost-certainly-incorrect moves such as buying a copper over a silver.
+
+
+With some tweaking to the learning rate based on mistake rate, 20,000
+games yielded:
+  SimpleAI: 41.2% +/- 0.9%
+  Tie: 6.3% +/- 0.4%
+  BigMoneyUltimate: 52.5% +/- 0.9%
+Not too bad.

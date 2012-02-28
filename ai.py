@@ -8,9 +8,7 @@ import random
 import re
 from stats import binomial_confidence_interval, binomial_confidence_interval_p
 
-# I estimate roughly 800 games per minute when training with BMU
-# and FINE_GRAIN_TURNS=25.
-N = 10000
+N = 20000
 CHECKPOINT_N = 1000
 
 verbose = 0
@@ -59,6 +57,8 @@ class PlayerState(object):
     self.discard = 7*['c'] + 3*['e']
 
     self.card_counts = {'c': 7, 'e': 3}
+    self.vp = 3
+    self._total_money_in_deck = 7
 
   def inc_card_count(self, card):
     self.card_counts[card] = self.count_card(card) + 1
@@ -73,6 +73,11 @@ class PlayerState(object):
     dupe.money = self.money
     dupe.turns = self.turns
     dupe.discard = list(self.discard)
+
+    dupe.card_counts = dict(self.card_counts)
+    dupe.vp = self.vp
+    dupe._total_money_in_deck = self._total_money_in_deck
+
     return dupe
 
   def say(self, msg):
@@ -114,8 +119,12 @@ class PlayerState(object):
       return False
 
     self.say('%s gains a %s' % (self.name, card))
+
     self.discard.append(card)
     self.inc_card_count(card)
+    self.vp += points.get(card, 0)
+    self._total_money_in_deck += values.get(card, 0)
+
     self.game.supply[card] -= 1
     return True
 
@@ -143,11 +152,7 @@ class PlayerState(object):
     return self.deck + self.hand + self.inplay + self.discard
 
   def get_vp(self):
-    vp = 0
-    for card in self.get_all_cards():
-      if card in points:
-        vp += points[card]
-    return vp
+    return self.vp
 
   def count_card(self, card):
     return self.card_counts.get(card, 0)
@@ -156,7 +161,7 @@ class PlayerState(object):
     return self.count_card(card) / float(self.total_cards_in_deck())
 
   def total_money_in_deck(self):
-    return sum(values.get(card, 0) for card in self.get_all_cards())
+    return self._total_money_in_deck
 
   def total_cards_in_deck(self):
     return len(self.get_all_cards())
@@ -306,29 +311,54 @@ sumsqerr = 0.0
 nsamples = 0
 msqerrf = file('msqerr.txt', 'w')
 
+mistakes = 0.0
+msamples = 0
+mistakef = file('mistake_rate.txt', 'w')
+
 msqerr_list = []
+mistakes_list = []
+rolling_mistakes_list = []
 ROLLING = 100
 
 def show_learn_data(strategy):
   global sumsqerr
   global nsamples
+  global mistakes
+  global msamples
+
   msqerr = sumsqerr / nsamples
   msqerr_list.append(msqerr)
   sumsqerr = 0.0
   nsamples = 0
 
+  mistake_rate = mistakes / msamples
+  mistakes_list.append(mistake_rate)
+  mistakes = 0.0
+  msamples = 0
+
   if len(msqerr_list) >= ROLLING:
-    rolling = sum(msqerr_list[-ROLLING:]) / ROLLING
+    rolling_msqerr = sum(msqerr_list[-ROLLING:]) / ROLLING
+    rolling_mistakes = sum(mistakes_list[-ROLLING:]) / ROLLING
+    rolling_mistakes_list.append(rolling_mistakes)
   else:
-    rolling = 0.0
-  print '==> %s (msq err = %.5lf, rolling = %.5lf)' % (strategy.name, msqerr, rolling)
+    rolling_msqerr = 0.0
+    rolling_mistakes = 0.0
+  print '  ==> %s (rolling msq err = %.5lf, rolling mistakes = %.5lf)' % (
+    strategy.name, rolling_msqerr, rolling_mistakes)
   print >>msqerrf, msqerr
+  print >>mistakef, mistake_rate
 
 class SimpleAI(LearningPlayerStrategy):
   def __init__(self):
     LearningPlayerStrategy.__init__(self)
+    #self.net.load(file('net201202281651/net.15000.dump'))
+    #self.net.load(file('netvsbmu201202281733/net.5000.dump'))
+    self.net.load(file('netvsbmu201202281809/net.10000.dump'))
 
   def buy(self, player, game):
+    global mistakes
+    global msamples
+
     ps = game.states[player.idx]
     buy_options = ['']
     for c in costs:
@@ -350,6 +380,16 @@ class SimpleAI(LearningPlayerStrategy):
           best = now
           bestc = c
       assert bestc != 'x'
+
+      msamples += 1
+      if ((bestc == 'c' and 's' in buy_options)
+          or (bestc == 's' and 'g' in buy_options)
+          or (bestc == 'e' and 'd' in buy_options)):
+        # Buying an estate instead of a duchy is not necessarily a mistake,
+        # but almost always it is.
+        mistakes += 1
+        say('  POSSIBLE BUY MISTAKE!')
+
       player.experimented = False
     else:
       # Don't propagate results of experiments backwards!
@@ -463,11 +503,13 @@ experiment_p = 0.0
 
 strategy = SimpleAI()
 
-STRATEGIES = [strategy, strategy]
+STRATEGIES = [strategy, BigMoneyUltimate()]
 
 def main():
   global alpha
   global experiment_p
+
+  low_mistake_time = 0
 
   wins = {}
   for i in range(N):
@@ -475,11 +517,43 @@ def main():
     # In the old 4-feature model,
     # alpha = 0.5 approaches a reasonable solution quickly. Larger values
     # tend to diverge.
-    alpha = 0.02
-    experiment_p = 0.1
+
+    # Training values.
+    #
+    # I observed that with parameters
+    #   alpha = 0.02
+    #   experiment_p = 0.1
+    # that clear mistakes seemed to be brought to their minimum of roughly
+    # 2%-3% after roughly 8000 games, and afterward they would mostly wobble
+    # around these values, suggesting that a training rate of 0.02 is too
+    # high after that point. Also, performing 10% experiments seems likely to
+    # introduce some distortion to the opponent's model at that point.
+    #
+    # So, let's adjust alpha based on the rolling mistake rate. The idea is
+    # to satisfy the stochastic approximation conditions... but only start
+    # doing this if we're already close.
+
+    REDUCTION_SPEED = 500.0
+    ROLLING_MISTAKES_THRESHOLD = 0.05
+    if (rolling_mistakes_list
+        and rolling_mistakes_list[-1] < ROLLING_MISTAKES_THRESHOLD):
+      low_mistake_time += 1
+    else:
+      low_mistake_time = max(0, low_mistake_time-1)
+
+    BASE_ALPHA = 0.02
+    BASE_EXPERIMENT_P = 0.1
+
+    REDUCTION = 1.0 / (1.0 + low_mistake_time/REDUCTION_SPEED)
+
+    alpha = BASE_ALPHA * REDUCTION
+    #experiment_p = BASE_EXPERIMENT_P * REDUCTION
+    experiment_p = 0.0
+
     game = Game()
     winners = game.play()
-    print 'Game %d' % i,
+    print 'Game %d (alpha = %.4lf, experiment_p = %.3lf)' % (
+      i, alpha, experiment_p)
     show_learn_data(strategy)
     print '  Winner %s' % winners
     winners = tuple(winners)

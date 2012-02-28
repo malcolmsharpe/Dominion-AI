@@ -29,6 +29,9 @@ class SmallCountFeature(CountFeature):
   def extract(self, count):
     return float(count >= self.count)
 
+  def __str__(self):
+    return 'SmallCountFeature(%s, %s)' % (self.card, self.count)
+
 class LargeCountFeature(CountFeature):
   def __init__(self, card, lo, hi, scale):
     self.card = card
@@ -40,9 +43,49 @@ class LargeCountFeature(CountFeature):
     n = max(self.lo, min(self.hi, count)) - self.lo
     return float(n * self.scale)
 
+  def __str__(self):
+    return 'LargeCountFeature(%s, %s, %s, %s)' % (
+      self.card, self.lo, self.hi, self.scale)
+
+class ScoreDeltaFeature(object):
+  def __init__(self, lo, hi, scale):
+    self.lo = lo
+    self.hi = hi
+    self.scale = scale
+
+  def player_extract(self, game, idx):
+    ps1 = game.states[idx]
+    ps2 = game.states[1-idx]
+    count = ps1.get_vp() - ps2.get_vp()
+    n = max(self.lo, min(self.hi, count)) - self.lo
+    return float(n * self.scale)
+
+  def __str__(self):
+    return 'ScoreDeltaFeature(%s, %s, %s)' % (
+      self.lo, self.hi, self.scale)
+
+class TotalMoneyFeature(object):
+  def __init__(self, lo, hi, scale):
+    self.lo = lo
+    self.hi = hi
+    self.scale = scale
+
+  def player_extract(self, game, idx):
+    ps = game.states[idx]
+    count = ps.total_money_in_deck()
+    n = max(self.lo, min(self.hi, count)) - self.lo
+    return float(n * self.scale)
+
+  def __str__(self):
+    return 'TotalMoneyFeature(%s, %s, %s)' % (
+      self.lo, self.hi, self.scale)
+
 class SecondPlayerFeature(object):
   def player_extract(self, game, idx):
     return float(idx)
+
+  def __str__(self):
+    return 'SecondPlayerFeature()'
 
 # For treasure, sometimes the AI's like to buy absurd amounts.
 # So the features should handle this decently--if a player has
@@ -83,6 +126,21 @@ PLAYER_FEATURES.append(SmallCountFeature('e', 5))
 PLAYER_FEATURES.append(SmallCountFeature('e', 6))
 PLAYER_FEATURES.append(SmallCountFeature('e', 7))
 PLAYER_FEATURES.append(LargeCountFeature('e', 7, INF, 0.5))
+
+PLAYER_FEATURES.append(ScoreDeltaFeature(0, 1, 1.0))
+PLAYER_FEATURES.append(ScoreDeltaFeature(1, 2, 1.0))
+PLAYER_FEATURES.append(ScoreDeltaFeature(2, 3, 1.0))
+PLAYER_FEATURES.append(ScoreDeltaFeature(3, 4, 1.0))
+PLAYER_FEATURES.append(ScoreDeltaFeature(4, 5, 1.0))
+PLAYER_FEATURES.append(ScoreDeltaFeature(5, 6, 1.0))
+PLAYER_FEATURES.append(ScoreDeltaFeature(6, 9, 1.0/3.0))
+PLAYER_FEATURES.append(ScoreDeltaFeature(9, 12, 1.0/3.0))
+PLAYER_FEATURES.append(ScoreDeltaFeature(12, INF, 0.03))
+
+PLAYER_FEATURES.append(TotalMoneyFeature(7,11,0.25))
+PLAYER_FEATURES.append(TotalMoneyFeature(11,15,0.25))
+PLAYER_FEATURES.append(TotalMoneyFeature(15,19,0.25))
+PLAYER_FEATURES.append(TotalMoneyFeature(19,INF,1.0/80.0))
 
 PLAYER_FEATURES.append(SecondPlayerFeature())
 
