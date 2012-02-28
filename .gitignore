@@ -3,9 +3,11 @@
 
 # Generate logfiles.
 ai_log.txt
+tail.txt
 lsq_data.txt
 msqerr.txt
 offline_weights.txt
+*.dump
 
 # Compiled python files.
 *.pyc
