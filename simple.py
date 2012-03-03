@@ -107,32 +107,12 @@ def compute_td_table(S,p,ngames,incr=None,entry=None):
   # value[s,d]
   value = {}
 
-  # For S=2 and p=0.5, entry = (2,0):
-  #   alpha = 0.1 is too high!
-  #   alpha = 0.01 also too high.
-  #   alpha = 0.001 gets ~1 decimal place accuracy after ~10,000 games.
-  #   alpha = 0.0001 gets ~3 decimal places accuracy after 200,000 games.
-  # Try varying learning rate.
-  #   alpha = 100.0/(100+g) does not settle fast enough for 200,000 games.
-  #   alpha = 10.0/(10+g) does better... about ~2dp consistently by 20k games.
-  #   alpha = 1.0/(10+g) though does not approach fast enough.
-  #   alpha = 1.0/(1+g) has the same problem.
-  # Maybe choose something like 1/sqrt(g)?
-  # That still satisfies the stochastic approx. conditions.
-  #   alpha = 1.0 / math.sqrt(1+g) does not settle fast enough.
-  # Conclusion so far:
-  #   alpha = 10.0/(10+g) about the best we have tried.
-  # Still the convergence is horribly horribly slow.
-  #
-  # Let's try an adaptive learning rate. The trick is to find a technique that
-  # is guaranteed to likely decrease the learning rate over time once
-  # convergence is obtained.
-  #
-  # Actually just tweaking a harmonic learning rate seems best. It can get
-  # results comparable to the batch method.
-
   for g in range(ngames):
-    alpha = max(float(S) / (float(S) + g), 1e-4)
+    # Tweaking a harmonic learning rate seems best.
+    # It can get results comparable to the batch method.
+    # Setting N0 to roughly the number of states seems to work well.
+    N0 = float(S)**2
+    alpha = max(N0 / (N0 + g), 1e-4)
     if incr is not None and (g+1)%incr==0:
       assert entry is not None
       if entry in value:
