@@ -127,21 +127,21 @@ def compute_td_table(S,p,ngames,incr=None,entry=None):
   # Let's try an adaptive learning rate. The trick is to find a technique that
   # is guaranteed to likely decrease the learning rate over time once
   # convergence is obtained.
-
-  alphas = {}
+  #
+  # Actually just tweaking a harmonic learning rate seems best. It can get
+  # results comparable to the batch method.
 
   for g in range(ngames):
+    alpha = max(float(S) / (float(S) + g), 1e-4)
     if incr is not None and (g+1)%incr==0:
       assert entry is not None
       if entry in value:
         print ('  TD game %d: '
                'value[%s] = %.4lf, '
-               'alpha[%s] = %.4lf, '
-               'est_abs_diff[%s] = %.4lf') % (
+               'alpha = %.4lf') % (
           g,
           entry,value.get(entry,0),
-          entry,alphas[entry].get_alpha(),
-          entry,alphas[entry].est_abs_diff)
+          alpha)
 
     s = S
     d = 0
@@ -169,11 +169,7 @@ def compute_td_table(S,p,ngames,incr=None,entry=None):
       old = value.get(prev,0)
       diff = target-old
 
-      if prev not in alphas:
-        alphas[prev] = AdaptiveAlpha()
-      alphas[prev].receive_diff(diff)
-
-      value[prev] = old + alphas[prev].get_alpha() * diff
+      value[prev] = old + alpha * diff
 
       if won is not None:
         break
@@ -244,28 +240,28 @@ def main():
     dp = compute_dp(S,p)
     print 'p=%.2lf => %.4lf' % (p, dp[S,0])
 
+  NGAMES = 100000
+  INCR = 20000
+  S = 8
+  p = 0.5
+  entry = (S,0)
+
   if 1:
     # Compare DP and incremental TD table.
-    S = 2
+    S = 8
     p = 0.5
-    entry = (2,0)
     dp = compute_dp(S,p)
     print 'dp[%s] = %.4lf' % (entry, dp[entry])
-    td_table = compute_td_table(S,p,10000,incr=2000,entry=entry)
-    print 'td_table[%s] = %.4lf' % ((1,1), td_table[1,1])
-    print 'td_table[%s] = %.4lf' % ((1,-1), td_table[1,-1])
+    td_table = compute_td_table(S,p,NGAMES,incr=INCR,entry=entry)
 
   if 1:
     # Compare DP and batch TD table.
     # This shows that maybe the incremental procedure is partly hampered by
     # not enough trials to get the desired precision.
     # In fact, the current adaptive alpha seems to be doing about as well.
-    S = 2
-    p = 0.5
-    entry = (2,0)
     dp = compute_dp(S,p)
     print 'dp[%s] = %.4lf' % (entry, dp[entry])
-    td_table = batch_td_table(S,p,10000)
+    td_table = batch_td_table(S,p,NGAMES)
     print 'td_table[%s] = %.4lf' % (entry, td_table[entry])
 
   # Data for plotting.
