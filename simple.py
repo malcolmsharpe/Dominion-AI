@@ -31,6 +31,41 @@ def compute_dp(S,p):
 assert compute_dp(8,1.0)[8,0] == 1.0
 
 class AdaptiveAlpha(object):
+  # This algorithm doesn't seem to converge well, but I think the idea makes
+  # sense.
+  #
+  # The first idea is to adjust the learning rate up when we see two
+  # consecutive differences with opposite sign, and down when they have the
+  # same sign.
+  #
+  # The second idea is to do this in a way that (on average) does not change
+  # the learning rate at the optimal solution. To be more precise, we want
+  # the expectation of the adjustment exponent to be zero. Obviously we
+  # actually want the learning rate to decrease at the optimal solution, so
+  # a bias is added to the exponent to cause it to tend negative.
+  #
+  # So, how do we get E[|adjust|] = 0 at the optimal solution?
+  # For simplicity, assume the optimal solution is fixed.
+  # (This is approximately true if the learning rate is very small.)
+  # 
+  # As a first attempt, for consecutive observations a and b, let
+  #   adjust = diff_a * diff_b.
+  # Note that adjust > 0 when two consecutive differences have the same sign
+  # and adjust < 0 when the sign differs, as we desired.
+  # Since we assume a Markov process, diff_a and diff_b are independent, so
+  #   E[adjust] = E[diff_a * diff_b]
+  #             = E[diff_a] * E[diff_b]
+  #             = E[diff]^2.
+  # But since the optimal solution is an average, E[diff] = 0.
+  #
+  # Now the question is how to reasonably normalize "adjust".
+  # We would like E[|normed adjust|] = 1.
+  # To achieve this, observe that
+  #   E[|adjust|] = E[|diff_a| |diff_b|] = E[|diff|]^2.
+  # So we can normalize by dividing by E[|diff|]^2.
+  # The difficulty is that we don't know what E[|diff|] is at the optimal
+  # solution. So, estimate it based on recent observed absolute differences.
+
   DIFF_ALPHA = 0.01
   ADJUST_BIAS = 0.0
   ADJUST_COEFF = 0.1
