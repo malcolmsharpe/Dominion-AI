@@ -30,6 +30,33 @@ def compute_dp(S,p):
 
 assert compute_dp(8,1.0)[8,0] == 1.0
 
+class AdaptiveAlpha(object):
+  DIFF_ALPHA = 0.01
+  ADJUST_BIAS = 0.0
+  ADJUST_COEFF = 0.1
+
+  def __init__(self):
+    self.est_abs_diff = 1.0
+    self.prev_diff = None
+    self.alpha = 0.1
+
+  def receive_diff(self, diff):
+    self.est_abs_diff += self.DIFF_ALPHA * (abs(diff) - self.est_abs_diff)
+
+    # If we don't do this, we get problems with constants.
+    self.est_abs_diff = max(1e-2, self.est_abs_diff)
+    
+    if self.prev_diff is not None:
+      diff_prod = diff * self.prev_diff
+      norm_diff_prod = diff_prod / (self.est_abs_diff**2)
+      adjust = self.ADJUST_COEFF * (self.ADJUST_BIAS + norm_diff_prod)
+      self.alpha *= math.exp(adjust)
+
+      # Try to avoid crazy values.
+      self.alpha = min(1e-1, max(1e-8, self.alpha))
+
+    self.prev_diff = diff
+
 def compute_td_table(S,p,ngames,incr=None,entry=None):
   # value[s,d]
   value = {}
@@ -54,12 +81,21 @@ def compute_td_table(S,p,ngames,incr=None,entry=None):
   # Let's try an adaptive learning rate. The trick is to find a technique that
   # is guaranteed to likely decrease the learning rate over time once
   # convergence is obtained.
-  for g in range(ngames):
-    alpha = 10.0 / (10+g)
 
+  alphas = {}
+
+  for g in range(ngames):
     if incr is not None and (g+1)%incr==0:
       assert entry is not None
-      print '  TD game %d: value[%s] = %.4lf' % (g,entry,value.get(entry,0))
+      if entry in value:
+        print ('  TD game %d: '
+               'value[%s] = %.4lf, '
+               'alpha[%s] = %.4lf, '
+               'est_abs_diff[%s] = %.4lf') % (
+          g,
+          entry,value.get(entry,0),
+          entry,alphas[entry].alpha,
+          entry,alphas[entry].est_abs_diff)
 
     s = S
     d = 0
@@ -77,6 +113,7 @@ def compute_td_table(S,p,ngames,incr=None,entry=None):
           else: won = (j == 1)
           break
 
+      # Train.
       if won is None:
         now = s,d
         target = value.get(now, 0)
@@ -84,8 +121,13 @@ def compute_td_table(S,p,ngames,incr=None,entry=None):
         target = int(won)
 
       old = value.get(prev,0)
+      diff = target-old
 
-      value[prev] = old + alpha*(target-old)
+      if prev not in alphas:
+        alphas[prev] = AdaptiveAlpha()
+      alphas[prev].receive_diff(diff)
+
+      value[prev] = old + alphas[prev].alpha * diff
 
       if won is not None:
         break
@@ -106,7 +148,7 @@ def main():
   entry = (2,0)
   dp = compute_dp(S,p)
   print 'dp[%s] = %.4lf' % (entry, dp[entry])
-  compute_td_table(S,p,20000,incr=2000,entry=entry)
+  compute_td_table(S,p,3000,incr=100,entry=entry)
 
   # Data for plotting.
 
