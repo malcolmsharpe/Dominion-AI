@@ -65,15 +65,21 @@ class AdaptiveAlpha(object):
   # So we can normalize by dividing by E[|diff|]^2.
   # The difficulty is that we don't know what E[|diff|] is at the optimal
   # solution. So, estimate it based on recent observed absolute differences.
+  #
+  # Maybe an exponential scale-down is the wrong way to go.
+  # Let's try a harmonic scale-down instead.
+  # Indeed that gets OK results, although it might just be because alpha is
+  # effectively just decreasing harmonically.
 
   DIFF_ALPHA = 0.01
-  ADJUST_BIAS = 0.0
-  ADJUST_COEFF = 0.1
+  ADJUST_BIAS = -0.7
+  ADJUST_COEFF = 1.0
+  N0 = 1.0
 
   def __init__(self):
     self.est_abs_diff = 1.0
     self.prev_diff = None
-    self.alpha = 0.1
+    self.scale_down = 0
 
   def receive_diff(self, diff):
     self.est_abs_diff += self.DIFF_ALPHA * (abs(diff) - self.est_abs_diff)
@@ -85,12 +91,15 @@ class AdaptiveAlpha(object):
       diff_prod = diff * self.prev_diff
       norm_diff_prod = diff_prod / (self.est_abs_diff**2)
       adjust = self.ADJUST_COEFF * (self.ADJUST_BIAS + norm_diff_prod)
-      self.alpha *= math.exp(adjust)
+      self.scale_down -= adjust
 
       # Try to avoid crazy values.
-      self.alpha = min(1e-1, max(1e-8, self.alpha))
+      self.scale_down = max(0.0, self.scale_down)
 
     self.prev_diff = diff
+
+  def get_alpha(self):
+    return self.N0 / (self.N0 + self.scale_down)
 
 def compute_td_table(S,p,ngames,incr=None,entry=None):
   # value[s,d]
@@ -129,7 +138,7 @@ def compute_td_table(S,p,ngames,incr=None,entry=None):
                'est_abs_diff[%s] = %.4lf') % (
           g,
           entry,value.get(entry,0),
-          entry,alphas[entry].alpha,
+          entry,alphas[entry].get_alpha(),
           entry,alphas[entry].est_abs_diff)
 
     s = S
@@ -162,7 +171,7 @@ def compute_td_table(S,p,ngames,incr=None,entry=None):
         alphas[prev] = AdaptiveAlpha()
       alphas[prev].receive_diff(diff)
 
-      value[prev] = old + alphas[prev].alpha * diff
+      value[prev] = old + alphas[prev].get_alpha() * diff
 
       if won is not None:
         break
@@ -183,7 +192,9 @@ def main():
   entry = (2,0)
   dp = compute_dp(S,p)
   print 'dp[%s] = %.4lf' % (entry, dp[entry])
-  compute_td_table(S,p,3000,incr=100,entry=entry)
+  td_table = compute_td_table(S,p,30,incr=1,entry=entry)
+  print 'td_table[%s] = %.4lf' % ((1,1), td_table[1,1])
+  print 'td_table[%s] = %.4lf' % ((1,-1), td_table[1,-1])
 
   # Data for plotting.
 
