@@ -20,6 +20,7 @@ head.txt
 weightviz.py
 mistakeviz.py
 plot_simple.py
+plot_simple_logreg.py
 
 # Plots.
 *.png

@@ -1,0 +1,12 @@
+A sigmoid function is extremely good for predicting winrate given
+province-count difference (when supply is fixed).
+A linear fit, on the other hand, is quite bad.
+
+The dependence on provinces-in-supply is roughly like you'd expect:
+the fewer provinces remaining, the more ahead the player who has more.
+Also, at equal count, it gives an advantage to the current
+player. By eye, it looks roughly like an inverse relationship.
+
+Since the logistic model is fantastic for fixed supply, it makes sense
+to see how its parameters vary as the supply varies. They seem roughly
+inverse to the remaining supply, which is nice. (Maybe remaining supply + 1?)

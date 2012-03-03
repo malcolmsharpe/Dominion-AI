@@ -269,8 +269,8 @@ def main():
   S = 40
   p = 0.5
   dp = compute_dp(S,p)
-  s = S/2
-  for d in range(-s, s+1):
-    print >>f, '%d,%r' % (d, dp[s,d])
+  for s in range(S+1):
+    for d in range(-(S-s), S-s+1):
+      print >>f, '%d,%d,%r' % (s, d, dp[s,d])
 
 main()
