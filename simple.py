@@ -104,27 +104,39 @@ class AdaptiveAlpha(object):
     return self.N0 / (self.N0 + self.scale_down)
 
 def compute_td_table(S,p,ngames,incr=None,entry=None):
-  # value[s,d]
-  value = {}
+  print S,p,ngames,incr,entry
+  states = []
+  for s in range(S+1):
+    for d in range(-S,S+1):
+      states.append((s,d))
+  rev_states = dict((st,i) for i,st in enumerate(states))
+
+  seen = set()
+
+  value = numpy.array([0.0] * len(states))
 
   for g in range(ngames):
+    # lamb=0 seems best. i.e. Pure TD.
+    lamb = 0.0
     # Tweaking a harmonic learning rate seems best.
-    # It can get results comparable to the batch method.
-    # Setting N0 to roughly the number of states seems to work well.
+    # It can get results comparable to the batch method. (Really?)
+    # For lamb=0, setting N0 to roughly the number of states seems to work well
+    # if large numbers of games are used.
     N0 = float(S)**2
     alpha = max(N0 / (N0 + g), 1e-4)
     if incr is not None and (g+1)%incr==0:
       assert entry is not None
-      if entry in value:
-        print ('  TD game %d: '
-               'value[%s] = %.4lf, '
-               'alpha = %.4lf') % (
-          g,
-          entry,value.get(entry,0),
-          alpha)
+      print ('  TD game %d: '
+             'value[%s] = %.4lf, '
+             'alpha = %.4lf') % (
+        g,
+        entry,value[rev_states[entry]],
+        alpha)
 
     s = S
     d = 0
+
+    elig = numpy.array([0.0] * len(states))
 
     while 1:
       prev = s,d
@@ -142,19 +154,25 @@ def compute_td_table(S,p,ngames,incr=None,entry=None):
       # Train.
       if won is None:
         now = s,d
-        target = value.get(now, 0)
+        target = value[rev_states[now]]
       else:
         target = int(won)
 
-      old = value.get(prev,0)
-      diff = target-old
+      diff = target-value[rev_states[prev]]
 
-      value[prev] = old + alpha * diff
+      elig = lamb*elig
+      elig[rev_states[prev]] += 1.0
+      value += alpha * diff * elig
+      seen.add(prev)
 
       if won is not None:
         break
 
-  return value
+  ret = {}
+  for i,st in enumerate(states):
+    if st in seen:
+      ret[st] = value[i]
+  return ret
 
 def batch_td_table(S,p,ngames):
   # Use least-squares TD algorithm to fill a TD table.
@@ -220,8 +238,8 @@ def main():
     dp = compute_dp(S,p)
     print 'p=%.2lf => %.4lf' % (p, dp[S,0])
 
-  NGAMES = 100000
-  INCR = 20000
+  NGAMES = 1000
+  INCR = 200
   S = 8
   p = 0.5
   entry = (S,0)
