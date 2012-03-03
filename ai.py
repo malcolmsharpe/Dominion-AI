@@ -353,7 +353,9 @@ class SimpleAI(LearningPlayerStrategy):
     LearningPlayerStrategy.__init__(self)
     #self.net.load(file('net201202281651/net.15000.dump'))
     #self.net.load(file('netvsbmu201202281733/net.5000.dump'))
-    self.net.load(file('netvsbmu201202281809/net.10000.dump'))
+    #self.net.load(file('netvsbmu201202281809/net.10000.dump'))
+    #self.net.load(file('netvsbmu201202281856/net.20000.dump'))
+    self.net.load(file('netvsbmu201202281940/net.20000.dump'))
 
   def buy(self, player, game):
     global mistakes
@@ -546,8 +548,9 @@ def main():
 
     REDUCTION = 1.0 / (1.0 + low_mistake_time/REDUCTION_SPEED)
 
-    alpha = BASE_ALPHA * REDUCTION
+    #alpha = BASE_ALPHA * REDUCTION
     #experiment_p = BASE_EXPERIMENT_P * REDUCTION
+    alpha = 0.0
     experiment_p = 0.0
 
     game = Game()

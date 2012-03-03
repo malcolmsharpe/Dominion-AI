@@ -20,3 +20,21 @@ games yielded:
   Tie: 6.3% +/- 0.4%
   BigMoneyUltimate: 52.5% +/- 0.9%
 Not too bad.
+
+Did another 20,000:
+  SimpleAI: 40.4% +/- 0.9%
+  Tie: 6.8% +/- 0.5%
+  BigMoneyUltimate: 52.8% +/- 0.9%
+
+Looking at the mistake graph, it seems like the initially-high learning
+rate is causing a massive spike in mistakes (nearly to 50%!) in the
+first ~3000 games. Since that is 15% of games where SimpleAI is basically
+throwing them away, it seems worth trying a non-learning run to see its
+"true" strength.
+  SimpleAI: 41.8% +/- 0.9%
+  Tie: 6.6% +/- 0.5%
+  BigMoneyUltimate: 51.6% +/- 0.9%
+This is barely different. Surprising I think. The mistake graph still shows
+the same shape--so maybe there is a problem with how we are measuring mistakes.
+Oh shit yes, I was still reading the old file. Also, it seems like 100 might
+be too small a value for ROLLING.

@@ -11,6 +11,7 @@ offline_weights.txt
 !*/*.dump
 rolling_mistakes.txt
 mistake_rate.txt
+head.txt
 
 # Compiled python files.
 *.pyc
