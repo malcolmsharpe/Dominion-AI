@@ -9,7 +9,9 @@
 # This model admits an exact DP solution.
 
 import math
+import numpy
 import random
+from scipy.linalg import lstsq
 
 def compute_dp(S,p):
   # dp[s,d]
@@ -178,6 +180,62 @@ def compute_td_table(S,p,ngames,incr=None,entry=None):
 
   return value
 
+def batch_td_table(S,p,ngames):
+  # Use least-squares TD algorithm to fill a TD table.
+  # (In other words, solve exactly using observed probabilities.)
+
+  trans = {}
+  rhs = {}
+
+  for g in range(ngames):
+    s = S
+    d = 0
+
+    while 1:
+      prev = s,d
+      won = None
+      for j in range(2):
+        if s and random.uniform(0,1) < p:
+          d += (-1)**j
+          s -= 1
+        if s==0:
+          if d>0: won = True
+          elif d<0: won = False
+          else: won = (j == 1)
+          break
+
+      # Store training data.
+      if won is None:
+        now = s,d
+        trans[prev,prev] = trans.get((prev,prev),0.0) + 1.0
+        trans[prev,now] = trans.get((prev,now),0.0) - 1.0
+        rhs[prev] = rhs.get(prev,0.0) + 0.0
+      else:
+        trans[prev,prev] = trans.get((prev,prev),0.0) + 1.0
+        rhs[prev] = rhs.get(prev,0.0) + float(won)
+
+      if won is not None:
+        break
+
+  states = list(rhs)
+  A = numpy.array([[0.0]*len(states)]*len(states))
+  b = numpy.array([0.0]*len(states))
+
+  for i,r in enumerate(states):
+    for j,c in enumerate(states):
+      A[i,j] = trans.get((r,c), 0.0)
+    b[i] = rhs.get(r, 0.0)
+
+  x,resid,rank,sigma = lstsq(A,b)
+
+  # value[s,d]
+  value = {}
+
+  for i,r in enumerate(states):
+    value[r] = x[i]
+
+  return value
+
 def main():
   S = 8
   N = 10
@@ -186,15 +244,29 @@ def main():
     dp = compute_dp(S,p)
     print 'p=%.2lf => %.4lf' % (p, dp[S,0])
 
-  # Compare DP and TD.
-  S = 2
-  p = 0.5
-  entry = (2,0)
-  dp = compute_dp(S,p)
-  print 'dp[%s] = %.4lf' % (entry, dp[entry])
-  td_table = compute_td_table(S,p,30,incr=1,entry=entry)
-  print 'td_table[%s] = %.4lf' % ((1,1), td_table[1,1])
-  print 'td_table[%s] = %.4lf' % ((1,-1), td_table[1,-1])
+  if 1:
+    # Compare DP and incremental TD table.
+    S = 2
+    p = 0.5
+    entry = (2,0)
+    dp = compute_dp(S,p)
+    print 'dp[%s] = %.4lf' % (entry, dp[entry])
+    td_table = compute_td_table(S,p,10000,incr=2000,entry=entry)
+    print 'td_table[%s] = %.4lf' % ((1,1), td_table[1,1])
+    print 'td_table[%s] = %.4lf' % ((1,-1), td_table[1,-1])
+
+  if 1:
+    # Compare DP and batch TD table.
+    # This shows that maybe the incremental procedure is partly hampered by
+    # not enough trials to get the desired precision.
+    # In fact, the current adaptive alpha seems to be doing about as well.
+    S = 2
+    p = 0.5
+    entry = (2,0)
+    dp = compute_dp(S,p)
+    print 'dp[%s] = %.4lf' % (entry, dp[entry])
+    td_table = batch_td_table(S,p,10000)
+    print 'td_table[%s] = %.4lf' % (entry, td_table[entry])
 
   # Data for plotting.
 
