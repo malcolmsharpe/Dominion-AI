@@ -13,8 +13,10 @@ inverse to the remaining supply, which is nice. (Maybe remaining supply + 1?)
 
 ~~~~
 
-In fact, the plotted curve is something very similar to the cumulative
+In fact, the plotted function is something very similar to the cumulative
 distribution function of a binomial distribution, which itself is
 approximated by the cumulative distribution function of a normal.
 This function has a sigmoid shape, so it makes sense that a logistic
-function could give a reasonably close fit.
+function could give a reasonably close (but not quite right) fit.
+This also supports the roughly inverse relationship of the parameters with
+the number of remaining provinces.

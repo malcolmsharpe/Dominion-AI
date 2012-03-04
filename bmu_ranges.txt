@@ -1,0 +1,13 @@
+In a typical game, BMU has:
+  7 copper exactly.
+  Up to ~9 silver.
+  Up to ~7 gold.
+  3-7 estates.
+  0-5 duchies.
+  0-5 provinces.
+
+So, deck state count for a single player is bounded by about
+  1 x 10 x 8 x 5 x 6 x 6 = 14,400
+or for both players together,
+  14,400^2 = 207,360,000
+But this bound should be quite an overestimate.
