@@ -1,4 +1,4 @@
-A sigmoid function is extremely good for predicting winrate given
+A logistic function is extremely good for predicting winrate given
 province-count difference (when supply is fixed).
 A linear fit, on the other hand, is quite bad.
 
@@ -10,3 +10,11 @@ player. By eye, it looks roughly like an inverse relationship.
 Since the logistic model is fantastic for fixed supply, it makes sense
 to see how its parameters vary as the supply varies. They seem roughly
 inverse to the remaining supply, which is nice. (Maybe remaining supply + 1?)
+
+~~~~
+
+In fact, the plotted curve is something very similar to the cumulative
+distribution function of a binomial distribution, which itself is
+approximated by the cumulative distribution function of a normal.
+This function has a sigmoid shape, so it makes sense that a logistic
+function could give a reasonably close fit.
