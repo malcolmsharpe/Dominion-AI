@@ -8,8 +8,10 @@
 #
 # This model admits an exact DP solution.
 
+from logistic_regression import logistic_regression
 import math
 import numpy
+from numpy import array
 import random
 from scipy.linalg import lstsq
 
@@ -174,10 +176,7 @@ def compute_td_table(S,p,ngames,incr=None,entry=None):
       ret[st] = value[i]
   return ret
 
-def batch_td_table(S,p,ngames):
-  # Use least-squares TD algorithm to fill a TD table.
-  # (In other words, solve exactly using observed probabilities.)
-
+def gen_table_training_data(S,p,ngames):
   trans = {}
   rhs = {}
 
@@ -211,6 +210,14 @@ def batch_td_table(S,p,ngames):
       if won is not None:
         break
 
+  return trans, rhs
+
+def batch_td_table(S,p,ngames):
+  # Use least-squares TD algorithm to fill a TD table.
+  # (In other words, solve exactly using observed probabilities.)
+
+  trans,rhs = gen_table_training_data(S,p,ngames)
+
   states = list(rhs)
   A = numpy.array([[0.0]*len(states)]*len(states))
   b = numpy.array([0.0]*len(states))
@@ -230,6 +237,82 @@ def batch_td_table(S,p,ngames):
 
   return value
 
+def gen_training_data(S,p,ngames):
+  records = []
+
+  for g in range(ngames):
+    s = S
+    d = 0
+
+    while 1:
+      prev = s,d
+      won = None
+      for j in range(2):
+        if s and random.uniform(0,1) < p:
+          d += (-1)**j
+          s -= 1
+        if s==0:
+          if d>0: won = True
+          elif d<0: won = False
+          else: won = (j == 1)
+          break
+
+      # Store training data.
+      if won is None:
+        now = s,d
+        records.append((prev,now))
+      else:
+        records.append((prev,won))
+
+      if won is not None:
+        break
+
+  return records
+
+def extract_features(st):
+  s,d = st
+  return array([1.0/s, d, d/float(s)])
+
+def sigmoid(z):
+  return 1.0 / (1.0 + math.exp(-z))
+
+def model_td_table(S,p,ngames):
+  # Use batch TD algorithm with a logistic model.
+  # Model terms: (1,) 1/s, d, d/s.
+  # I guess we need to iterate the logistic regression a few times?
+
+  records = gen_training_data(S,p,ngames)
+  n = 3
+  m = len(records)
+
+  states = []
+  X = array([[0.0]*m]*n)
+  for i,(prev,_) in enumerate(records):
+    X[:,i] = extract_features(prev)
+    states.append(prev)
+
+  ITERS = 30
+  theta = array([0.0]*(n+1))
+  for it in range(ITERS):
+    y = array([0.0]*m)
+    for i,(_,outcome) in enumerate(records):
+      if isinstance(outcome,tuple):
+        outcome = sigmoid(theta[0] + theta[1:].dot(extract_features(outcome)))
+      y[i] = outcome
+
+    theta,J_bar,l = logistic_regression(X,y,theta)
+
+    print '  >>> theta = %s' % theta
+
+  # value[s,d]
+  value = {}
+
+  for r in states:
+    prediction = sigmoid(theta[0] + theta[1:].dot(extract_features(r)))
+    value[r] = prediction
+
+  return value
+
 def main():
   S = 8
   N = 10
@@ -238,29 +321,40 @@ def main():
     dp = compute_dp(S,p)
     print 'p=%.2lf => %.4lf' % (p, dp[S,0])
 
-  NGAMES = 1000
-  INCR = 200
+  NGAMES = 10000
+  INCR = 2000
   S = 8
   p = 0.5
   entry = (S,0)
+  dp = compute_dp(S,p)
 
   if 1:
     # Compare DP and incremental TD table.
-    S = 8
-    p = 0.5
-    dp = compute_dp(S,p)
     print 'dp[%s] = %.4lf' % (entry, dp[entry])
     td_table = compute_td_table(S,p,NGAMES,incr=INCR,entry=entry)
 
-  if 1:
+  if 0:
     # Compare DP and batch TD table.
     # This shows that maybe the incremental procedure is partly hampered by
     # not enough trials to get the desired precision.
     # In fact, the current adaptive alpha seems to be doing about as well.
-    dp = compute_dp(S,p)
     print 'dp[%s] = %.4lf' % (entry, dp[entry])
     td_table = batch_td_table(S,p,NGAMES)
     print 'td_table[%s] = %.4lf' % (entry, td_table[entry])
+
+  if 1:
+    # Compare DP and model TD table.
+    print 'dp[%s] = %.4lf' % (entry, dp[entry])
+    td_table = model_td_table(S,p,NGAMES)
+    print 'td_table[%s] = %.4lf (dp = %.4lf)' % (entry, td_table[entry], dp[entry])
+    entry = (6,2)
+    print 'td_table[%s] = %.4lf (dp = %.4lf)' % (entry, td_table[entry], dp[entry])
+    entry = (5,1)
+    print 'td_table[%s] = %.4lf (dp = %.4lf)' % (entry, td_table[entry], dp[entry])
+    entry = (3,1)
+    print 'td_table[%s] = %.4lf (dp = %.4lf)' % (entry, td_table[entry], dp[entry])
+    entry = (1,1)
+    print 'td_table[%s] = %.4lf (dp = %.4lf)' % (entry, td_table[entry], dp[entry])
 
   # Data for plotting.
 
