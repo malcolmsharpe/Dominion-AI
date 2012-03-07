@@ -291,7 +291,7 @@ def model_td_table(S,p,ngames):
     X[:,i] = extract_features(prev)
     states.append(prev)
 
-  ITERS = 30
+  ITERS = 20
   theta = array([0.0]*(n+1))
   for it in range(ITERS):
     y = array([0.0]*m)
@@ -313,6 +313,44 @@ def model_td_table(S,p,ngames):
 
   return value
 
+def incr_model_td_table(S,p,ngames,incr=None):
+  # Use incremental TD algorithm, lambda=0, with a logistic model.
+  # Model terms: (1,) 1/s, d, d/s.
+
+  alpha = 0.1
+
+  records = gen_training_data(S,p,ngames)
+  n = 3
+  m = len(records)
+
+  theta = array([0.0]*(n+1))
+
+  g = 0
+  states = []
+  x = array([1.0]*(n+1))
+  for i,(prev,outcome) in enumerate(records):
+    x[1:] = extract_features(prev)
+    if isinstance(outcome,tuple):
+      outcome = sigmoid(theta[0] + theta[1:].dot(extract_features(outcome)))
+    else:
+      g += 1
+      if incr is not None and g%incr == 0:
+        print '  >>> theta = %s' % theta
+
+    theta = theta + alpha * (outcome - sigmoid(theta.dot(x))) * x
+    states.append(prev)
+
+  print '  >>> theta = %s' % theta
+
+  # value[s,d]
+  value = {}
+
+  for r in states:
+    prediction = sigmoid(theta[0] + theta[1:].dot(extract_features(r)))
+    value[r] = prediction
+
+  return value
+
 def main():
   S = 8
   N = 10
@@ -321,31 +359,34 @@ def main():
     dp = compute_dp(S,p)
     print 'p=%.2lf => %.4lf' % (p, dp[S,0])
 
-  NGAMES = 10000
-  INCR = 2000
+  NGAMES = 1000
+  INCR = 100
   S = 8
   p = 0.5
   entry = (S,0)
   dp = compute_dp(S,p)
 
   if 1:
-    # Compare DP and incremental TD table.
+    print '*** Compare DP and incremental TD table.'
     print 'dp[%s] = %.4lf' % (entry, dp[entry])
     td_table = compute_td_table(S,p,NGAMES,incr=INCR,entry=entry)
+    print
 
   if 0:
-    # Compare DP and batch TD table.
+    print '*** Compare DP and batch TD table.'
     # This shows that maybe the incremental procedure is partly hampered by
     # not enough trials to get the desired precision.
     # In fact, the current adaptive alpha seems to be doing about as well.
     print 'dp[%s] = %.4lf' % (entry, dp[entry])
     td_table = batch_td_table(S,p,NGAMES)
     print 'td_table[%s] = %.4lf' % (entry, td_table[entry])
+    print
 
   if 1:
-    # Compare DP and model TD table.
+    print '*** Compare DP and batch model TD table'
     print 'dp[%s] = %.4lf' % (entry, dp[entry])
     td_table = model_td_table(S,p,NGAMES)
+    entry = (S,0)
     print 'td_table[%s] = %.4lf (dp = %.4lf)' % (entry, td_table[entry], dp[entry])
     entry = (6,2)
     print 'td_table[%s] = %.4lf (dp = %.4lf)' % (entry, td_table[entry], dp[entry])
@@ -355,6 +396,23 @@ def main():
     print 'td_table[%s] = %.4lf (dp = %.4lf)' % (entry, td_table[entry], dp[entry])
     entry = (1,1)
     print 'td_table[%s] = %.4lf (dp = %.4lf)' % (entry, td_table[entry], dp[entry])
+    print
+
+  if 1:
+    print '*** Compare DP and incremental model TD table'
+    print 'dp[%s] = %.4lf' % (entry, dp[entry])
+    td_table = incr_model_td_table(S,p,NGAMES,incr=INCR)
+    entry = (S,0)
+    print 'td_table[%s] = %.4lf (dp = %.4lf)' % (entry, td_table[entry], dp[entry])
+    entry = (6,2)
+    print 'td_table[%s] = %.4lf (dp = %.4lf)' % (entry, td_table[entry], dp[entry])
+    entry = (5,1)
+    print 'td_table[%s] = %.4lf (dp = %.4lf)' % (entry, td_table[entry], dp[entry])
+    entry = (3,1)
+    print 'td_table[%s] = %.4lf (dp = %.4lf)' % (entry, td_table[entry], dp[entry])
+    entry = (1,1)
+    print 'td_table[%s] = %.4lf (dp = %.4lf)' % (entry, td_table[entry], dp[entry])
+    print
 
   # Data for plotting.
 
