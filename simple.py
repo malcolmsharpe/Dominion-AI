@@ -14,6 +14,8 @@ import numpy
 from numpy import array
 import random
 from scipy.linalg import lstsq
+from scipy.stats import norm
+import sys
 
 def compute_dp(S,p):
   # dp[s,d]
@@ -317,7 +319,8 @@ def incr_model_td_table(S,p,ngames,incr=None):
   # Use incremental TD algorithm, lambda=0, with a logistic model.
   # Model terms: (1,) 1/s, d, d/s.
 
-  alpha = 0.1
+  BASE_ALPHA = 0.05
+  N0 = ngames / 4.0
 
   records = gen_training_data(S,p,ngames)
   n = 3
@@ -337,16 +340,71 @@ def incr_model_td_table(S,p,ngames,incr=None):
       if incr is not None and g%incr == 0:
         print '  >>> theta = %s' % theta
 
+    alpha = BASE_ALPHA * N0 / (N0 + g)
     theta = theta + alpha * (outcome - sigmoid(theta.dot(x))) * x
     states.append(prev)
 
-  print '  >>> theta = %s' % theta
+  print '  >>> final theta = %s' % theta
 
   # value[s,d]
   value = {}
 
   for r in states:
     prediction = sigmoid(theta[0] + theta[1:].dot(extract_features(r)))
+    value[r] = prediction
+
+  return value
+
+std_norm = norm(0,1)
+
+def probit(x):
+  return std_norm.cdf(x)
+
+def dprobit(x):
+  return std_norm.pdf(x)
+
+def incr_probit_td_table(S,p,ngames,incr=None):
+  # Use incremental TD algorithm, lambda=0, with a probit model.
+  # Model terms: (1,) 1/s, d, d/s.
+
+  BASE_ALPHA = 0.1
+  N0 = ngames / 4.0
+
+  records = gen_training_data(S,p,ngames)
+  n = 3
+  m = len(records)
+
+  theta = array([0.0]*(n+1))
+
+  g = 0
+  states = []
+  x = array([1.0]*(n+1))
+  for i,(prev,outcome) in enumerate(records):
+    x[1:] = extract_features(prev)
+    if isinstance(outcome,tuple):
+      outcome = probit(theta[0] + theta[1:].dot(extract_features(outcome)))
+    else:
+      g += 1
+      if incr is not None and g%incr == 0:
+        print '  >>> theta = %s' % theta
+
+    alpha = BASE_ALPHA * N0 / (N0 + g)
+    eta = theta.dot(x)
+    # The formula in comments is the actual scale of the gradient. Problem is that
+    # there are numerical issues when eta is quite far from zero. The deleted factor
+    # doesn't vary all that much anyway (it's about 1.6 at eta=0 and around 7.6 at eta=8).
+    #adjust = (outcome - probit(eta)) * dprobit(eta) / (probit(eta)*(1-probit(eta)))
+    adjust = (outcome - probit(eta))
+    theta = theta + alpha * adjust * x
+    states.append(prev)
+
+  print '  >>> final theta = %s' % theta
+
+  # value[s,d]
+  value = {}
+
+  for r in states:
+    prediction = probit(theta[0] + theta[1:].dot(extract_features(r)))
     value[r] = prediction
 
   return value
@@ -359,7 +417,7 @@ def main():
     dp = compute_dp(S,p)
     print 'p=%.2lf => %.4lf' % (p, dp[S,0])
 
-  NGAMES = 1000
+  NGAMES = 2000
   INCR = 100
   S = 8
   p = 0.5
@@ -382,7 +440,7 @@ def main():
     print 'td_table[%s] = %.4lf' % (entry, td_table[entry])
     print
 
-  if 1:
+  if 0:
     print '*** Compare DP and batch model TD table'
     print 'dp[%s] = %.4lf' % (entry, dp[entry])
     td_table = model_td_table(S,p,NGAMES)
@@ -402,6 +460,22 @@ def main():
     print '*** Compare DP and incremental model TD table'
     print 'dp[%s] = %.4lf' % (entry, dp[entry])
     td_table = incr_model_td_table(S,p,NGAMES,incr=INCR)
+    entry = (S,0)
+    print 'td_table[%s] = %.4lf (dp = %.4lf)' % (entry, td_table[entry], dp[entry])
+    entry = (6,2)
+    print 'td_table[%s] = %.4lf (dp = %.4lf)' % (entry, td_table[entry], dp[entry])
+    entry = (5,1)
+    print 'td_table[%s] = %.4lf (dp = %.4lf)' % (entry, td_table[entry], dp[entry])
+    entry = (3,1)
+    print 'td_table[%s] = %.4lf (dp = %.4lf)' % (entry, td_table[entry], dp[entry])
+    entry = (1,1)
+    print 'td_table[%s] = %.4lf (dp = %.4lf)' % (entry, td_table[entry], dp[entry])
+    print
+
+  if 1:
+    print '*** Compare DP and incremental probit TD table'
+    print 'dp[%s] = %.4lf' % (entry, dp[entry])
+    td_table = incr_probit_td_table(S,p,NGAMES,incr=INCR)
     entry = (S,0)
     print 'td_table[%s] = %.4lf (dp = %.4lf)' % (entry, td_table[entry], dp[entry])
     entry = (6,2)
