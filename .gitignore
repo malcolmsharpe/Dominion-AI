@@ -21,6 +21,7 @@ weightviz.py
 mistakeviz.py
 plot_simple.py
 plot_simple_logreg.py
+plot_money_density_experiment.py
 
 # Plots.
 *.png
